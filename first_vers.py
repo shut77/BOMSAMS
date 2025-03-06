@@ -206,8 +206,9 @@ async def history(update: Update, context: CallbackContext) -> None:
     await update.message.reply_text(response)
 
 def main() -> None:
-    from token_for_tg import TOKEN_TG
-    TOKEN = TOKEN_TG
+    TOKEN = os.getenv("TELEGRAM_TOKEN")
+    if not TOKEN:
+        raise ValueError("Переменная окружения TELEGRAM_TOKEN не задана!")
     application = Application.builder().token(TOKEN).build()
 
     # Обработчики команд
