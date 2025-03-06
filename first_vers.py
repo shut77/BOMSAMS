@@ -32,8 +32,8 @@ logger = logging.getLogger(__name__)
 (
     GROUP_NAME, GROUP_PASSWORD, JOIN_GROUP, JOIN_PASSWORD,
     EVENT_GROUP, EVENT_DATE, EVENT_START, EVENT_END, EVENT_LOCATION,
-    CURRENT_CHOOSE_GROUP
-) = range(10)
+    CURRENT_CHOOSE_GROUP, HISTORY_CHOOSE_GROUP
+) = range(11)
 
 # Команда /start
 async def start(update: Update, context: CallbackContext) -> None:
@@ -96,6 +96,53 @@ async def process_event_location(update: Update, context: CallbackContext) -> in
     })
 
     await update.message.reply_text("✅ Событие добавлено!")
+    return ConversationHandler.END
+# История событий с выбором группы
+async def history(update: Update, context: CallbackContext) -> int:
+    user_id = update.message.from_user.id
+    groups = db.collection('groups').where('members', 'array_contains', user_id).stream()
+    group_names = [group.id for group in groups]
+
+    if not group_names:
+        await update.message.reply_text("❌ Вы не состоите ни в одной группе!")
+        return ConversationHandler.END
+
+    context.user_data['history_groups'] = group_names
+    group_list = "\n".join(group_names)
+    await update.message.reply_text(f"Выберите группу для просмотра истории:\n{group_list}")
+    return HISTORY_CHOOSE_GROUP
+
+async def process_history_group(update: Update, context: CallbackContext) -> int:
+    selected_group = update.message.text
+    history_groups = context.user_data.get('history_groups', [])
+
+    if selected_group not in history_groups:
+        await update.message.reply_text("❌ Группа не найдена! Выберите из списка.")
+        return HISTORY_CHOOSE_GROUP
+
+    events = db.collection('events').where('group', '==', selected_group)\
+                                     .order_by('timestamp')\
+                                     .stream()
+
+    response = f"📜 История событий в группе '{selected_group}':\n"
+    events_found = False
+
+    for event in events:
+        events_found = True
+        event_data = event.to_dict()
+        creator_link = f"tg://user?id={event_data['user_id']}"
+        start_time = parser.parse(event_data['date']).strftime("%d.%m.%Y %H:%M")
+        end_time = parser.parse(event_data['end_time']).strftime("%H:%M")
+        response += (
+            f"📅 *{start_time}-{end_time}*\n"
+            f"📍 {event_data['location']}\n"
+            f"👤 [Создатель]({creator_link})\n\n"
+        )
+
+    if not events_found:
+        response = "🤷♂️ В этой группе еще не было событий."
+
+    await update.message.reply_text(response, parse_mode='Markdown')
     return ConversationHandler.END
 
 # Просмотр текущих событий (обновлено)
@@ -166,6 +213,14 @@ def main() -> None:
         fallbacks=[]
     )
     application.add_handler(conv_current)
+    conv_history = ConversationHandler(
+        entry_points=[CommandHandler('history', history)],
+        states={
+            HISTORY_CHOOSE_GROUP: [MessageHandler(filters.TEXT, process_history_group)]
+        },
+        fallbacks=[]
+    )
+    application.add_handler(conv_history)
 
     application.run_polling()
 
