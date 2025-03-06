@@ -16,8 +16,23 @@ import firebase_admin
 from firebase_admin import credentials, firestore
 
 # Настройка Firebase
-cred = credentials.Certificate("bomsams-e0996-firebase-adminsdk-fbsvc-64de839fde.json")
+import os
+import json
+from firebase_admin import credentials
+
+# Чтение JSON из переменной окружения
+firebase_config = os.environ.get("GOOGLE_APPLICATION_CREDENTIALS")
+
+if not firebase_config:
+    raise ValueError("Переменная окружения GOOGLE_APPLICATION_CREDENTIALS не задана!")
+
+# Преобразование строки в JSON-объект
+cred_dict = json.loads(firebase_config)
+
+# Инициализация Firebase
+cred = credentials.Certificate(cred_dict)
 firebase_admin.initialize_app(cred)
+
 db = firestore.client()
 
 # Настройка логов
