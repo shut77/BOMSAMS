@@ -68,13 +68,24 @@ async def process_group_password(update: Update, context: CallbackContext) -> in
     password = update.message.text
     user_id = update.message.from_user.id
 
-    # Создание группы в Firestore
-    db.collection('groups').document(group_name).set({
-        'password': password,
-        'members': [user_id]
-    })
+    # Проверка и очистка group_name
+    if not group_name:
+        await update.message.reply_text("❌ Название группы не может быть пустым!")
+        return ConversationHandler.END
 
-    await update.message.reply_text(f"✅ Группа '{group_name}' создана!")
+    # Заменяем запрещенные символы
+    group_name = group_name.replace("/", "_")
+
+    # Создание группы в Firestore
+    try:
+        db.collection('groups').document(group_name).set({
+            'password': password,
+            'members': [user_id]
+        })
+        await update.message.reply_text(f"✅ Группа '{group_name}' создана!")
+    except Exception as e:
+        await update.message.reply_text(f"❌ Ошибка при создании группы: {e}")
+
     return ConversationHandler.END
 
 # Присоединение к группе
