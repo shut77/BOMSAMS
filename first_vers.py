@@ -14,7 +14,7 @@ from telegram.ext import (
 import firebase_admin
 from firebase_admin import credentials, firestore
 import json
-
+#для коммита
 # Настройка Firebase
 firebase_config = os.environ.get("GOOGLE_APPLICATION_CREDENTIALS")
 if not firebase_config:
