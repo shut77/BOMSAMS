@@ -2,3 +2,4 @@ python-telegram-bot
 firebase-admin
 python-dateutil
 aiohttp
+aiohttp_cors
