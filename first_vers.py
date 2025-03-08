@@ -170,6 +170,29 @@ async def setup_http_server():
             logger.error(f"Error creating event: {str(e)}")
             return web.json_response({'error': 'Server error'}, status=500)
 
+    # Эндпоинт: Удаление события
+    async def delete_event(request):
+        try:
+            data = await request.json()
+            required_fields = ['group', 'event_id']
+            if not all(field in data for field in required_fields):
+                return web.json_response({'error': 'Missing required fields'}, status=400)
+
+            group_name = data['group']
+            event_id = data['event_id']
+            group_ref = db.collection('groups').document(group_name)
+            event_ref = group_ref.collection('events').document(event_id)
+
+            if not event_ref.get().exists:
+                return web.json_response({'error': 'Event not found'}, status=404)
+
+            event_ref.delete()
+            return web.json_response({'status': 'Event deleted'})
+
+        except Exception as e:
+            logger.error(f"Error deleting event: {str(e)}")
+            return web.json_response({'error': 'Server error'}, status=500)
+
     # Эндпоинт: Получение событий
     async def get_events(request):
         try:
@@ -220,7 +243,8 @@ async def setup_http_server():
         ('/create_group', 'POST', create_group),
         ('/join_group', 'POST', join_group),
         ('/create_event', 'POST', create_event),
-        ('/get_events', 'GET', get_events)
+        ('/get_events', 'GET', get_events),
+        ('/delete_event', 'POST', delete_event)
     ]
 
     for path, method, handler in routes:
