@@ -25,34 +25,33 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
-
 def format_event_time(event_data):
-    # Предполагаем, что событие хранит время начала в поле 'start' и время окончания в поле 'end'
+    # Берём ISO-строки из полей 'start' и 'end'
     start_str = event_data.get('start')
     end_str = event_data.get('end')
+
     if start_str:
         try:
             start_dt = datetime.fromisoformat(start_str)
-            date_pretty = start_dt.strftime("%d.%m.%Y")  # например, "08.03.2025"
-            time_pretty = start_dt.strftime("%H:%M")
-        except Exception as e:
+            date_pretty = start_dt.strftime("%d.%m.%Y")  # Например, "08.03.2025"
+            start_time_pretty = start_dt.strftime("%H:%M")  # Например, "13:00"
+        except Exception:
             date_pretty = "-"
-            time_pretty = "-"
+            start_time_pretty = "-"
     else:
         date_pretty = "-"
-        time_pretty = "-"
+        start_time_pretty = "-"
 
     if end_str:
         try:
             end_dt = datetime.fromisoformat(end_str)
-            # Если нужно показать интервал времени
-            time_pretty += f" - {end_dt.strftime('%H:%M')}"
-        except Exception as e:
-            time_pretty += " - -"
+            end_time_pretty = end_dt.strftime("%H:%M")  # Например, "15:00"
+        except Exception:
+            end_time_pretty = "-"
     else:
-        time_pretty += " - -"
+        end_time_pretty = "-"
 
-    return date_pretty, time_pretty
+    return date_pretty, start_time_pretty, end_time_pretty
 
 
 async def setup_http_server():
@@ -138,10 +137,12 @@ async def setup_http_server():
             return web.json_response({'error': 'Server error'}, status=500)
 
     # Эндпоинт: Создание события
+    # Эндпоинт: Создание события
     async def create_event(request):
         try:
             data = await request.json()
-            required_fields = ['user_id', 'group', 'start', 'end', 'location']
+            # Обновлённый список обязательных полей
+            required_fields = ['user_id', 'group', 'date', 'start_time', 'end_time', 'location']
 
             if not all(field in data for field in required_fields):
                 return web.json_response({'error': 'Missing required fields'}, status=400)
@@ -150,10 +151,14 @@ async def setup_http_server():
             if not group_ref.get().exists:
                 return web.json_response({'error': 'Group not found'}, status=404)
 
+            # Комбинируем дату и время в ISO-формат
+            start_iso = f"{data['date']}T{data['start_time']}:00"
+            end_iso = f"{data['date']}T{data['end_time']}:00"
+
             event_data = {
                 'user_id': int(data['user_id']),
-                'start': data['start'],  # например, "2025-03-08T13:00:00"
-                'end': data['end'],  # например, "2025-03-08T15:00:00"
+                'start': start_iso,  # например, "2025-03-08T13:00:00"
+                'end': end_iso,  # например, "2025-03-08T15:00:00"
                 'location': data['location'],
                 'timestamp': datetime.now().isoformat()
             }
@@ -177,7 +182,7 @@ async def setup_http_server():
             events_ref = db.collection('groups').document(group_name).collection('events')
 
             if time_filter == 'history':
-                # Для истории можно сортировать по времени создания или по start
+                # Можно сортировать по времени создания или по 'start'
                 events = events_ref.order_by('timestamp').stream()
             else:  # current – ближайшие 2 дня
                 now = datetime.now()
@@ -195,10 +200,11 @@ async def setup_http_server():
                 event_data = event.to_dict()
                 event_data['id'] = event.id
 
-                # Форматирование даты и времени для красивого вывода
-                date_pretty, time_pretty = format_event_time(event_data)
-                event_data['date'] = date_pretty  # перезаписываем поле date
-                event_data['time'] = time_pretty  # перезаписываем поле time
+                # Форматирование даты и времени для отображения
+                date_pretty, start_time_pretty, end_time_pretty = format_event_time(event_data)
+                event_data['date'] = date_pretty
+                event_data['start_time'] = start_time_pretty
+                event_data['end_time'] = end_time_pretty
 
                 result.append(event_data)
 
