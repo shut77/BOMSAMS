@@ -51,10 +51,7 @@ async def setup_http_server():
 
         except Exception as e:
             logger.error(f"Error getting groups: {str(e)}")
-            return web.json_response(
-                [{"id": group.id, "name": group.to_dict().get("name", group.id)} for group in groups],
-                dumps=lambda data: dumps(data, ensure_ascii=False)  # Отключаем ASCII-кодирование
-            )
+            return web.json_response({'error': 'Server error'}, status=500)
 
     # Эндпоинт: Создание группы
     async def create_group(request):
