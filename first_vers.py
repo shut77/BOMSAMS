@@ -177,21 +177,18 @@ async def setup_http_server():
             events_ref = db.collection('groups').document(group_name).collection('events')
 
             if time_filter == 'history':
+                # Для истории можно сортировать по времени создания или по start
                 events = events_ref.order_by('timestamp').stream()
-            else:  # current
-                if time_filter == 'history':
-                    # Здесь можно сортировать по времени начала или по timestamp
-                    events = events_ref.order_by('date').stream()
-                else:  # current – события ближайшие 2 дня
-                    now = datetime.now()
-                    two_days_later = now + timedelta(days=2)
-                    now_iso = now.isoformat()
-                    two_days_later_iso = two_days_later.isoformat()
-                    events = events_ref \
-                        .where('date', '>=', now_iso) \
-                        .where('date', '<=', two_days_later_iso) \
-                        .order_by('date') \
-                        .stream()
+            else:  # current – ближайшие 2 дня
+                now = datetime.now()
+                two_days_later = now + timedelta(days=2)
+                now_iso = now.isoformat()
+                two_days_later_iso = two_days_later.isoformat()
+                events = events_ref \
+                    .where('start', '>=', now_iso) \
+                    .where('start', '<=', two_days_later_iso) \
+                    .order_by('start') \
+                    .stream()
 
             result = []
             for event in events:
@@ -200,8 +197,8 @@ async def setup_http_server():
 
                 # Форматирование даты и времени для красивого вывода
                 date_pretty, time_pretty = format_event_time(event_data)
-                event_data['date'] = date_pretty
-                event_data['time'] = time_pretty
+                event_data['date'] = date_pretty  # перезаписываем поле date
+                event_data['time'] = time_pretty  # перезаписываем поле time
 
                 result.append(event_data)
 
