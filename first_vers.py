@@ -25,6 +25,36 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
+
+def format_event_time(event_data):
+    # Предполагаем, что событие хранит время начала в поле 'start' и время окончания в поле 'end'
+    start_str = event_data.get('start')
+    end_str = event_data.get('end')
+    if start_str:
+        try:
+            start_dt = datetime.fromisoformat(start_str)
+            date_pretty = start_dt.strftime("%d.%m.%Y")  # например, "08.03.2025"
+            time_pretty = start_dt.strftime("%H:%M")
+        except Exception as e:
+            date_pretty = "-"
+            time_pretty = "-"
+    else:
+        date_pretty = "-"
+        time_pretty = "-"
+
+    if end_str:
+        try:
+            end_dt = datetime.fromisoformat(end_str)
+            # Если нужно показать интервал времени
+            time_pretty += f" - {end_dt.strftime('%H:%M')}"
+        except Exception as e:
+            time_pretty += " - -"
+    else:
+        time_pretty += " - -"
+
+    return date_pretty, time_pretty
+
+
 async def setup_http_server():
     app = web.Application()
 
@@ -111,7 +141,7 @@ async def setup_http_server():
     async def create_event(request):
         try:
             data = await request.json()
-            required_fields = ['user_id', 'group', 'date', 'location']
+            required_fields = ['user_id', 'group', 'start', 'end', 'location']
 
             if not all(field in data for field in required_fields):
                 return web.json_response({'error': 'Missing required fields'}, status=400)
@@ -122,7 +152,8 @@ async def setup_http_server():
 
             event_data = {
                 'user_id': int(data['user_id']),
-                'date': data['date'],
+                'start': data['start'],  # например, "2025-03-08T13:00:00"
+                'end': data['end'],  # например, "2025-03-08T15:00:00"
                 'location': data['location'],
                 'timestamp': datetime.now().isoformat()
             }
@@ -148,13 +179,30 @@ async def setup_http_server():
             if time_filter == 'history':
                 events = events_ref.order_by('timestamp').stream()
             else:  # current
-                two_days_later = datetime.now() + timedelta(days=2)
-                events = events_ref.where('date', '<=', two_days_later.isoformat()).order_by('date').stream()
+                if time_filter == 'history':
+                    # Здесь можно сортировать по времени начала или по timestamp
+                    events = events_ref.order_by('date').stream()
+                else:  # current – события ближайшие 2 дня
+                    now = datetime.now()
+                    two_days_later = now + timedelta(days=2)
+                    now_iso = now.isoformat()
+                    two_days_later_iso = two_days_later.isoformat()
+                    events = events_ref \
+                        .where('date', '>=', now_iso) \
+                        .where('date', '<=', two_days_later_iso) \
+                        .order_by('date') \
+                        .stream()
 
             result = []
             for event in events:
                 event_data = event.to_dict()
                 event_data['id'] = event.id
+
+                # Форматирование даты и времени для красивого вывода
+                date_pretty, time_pretty = format_event_time(event_data)
+                event_data['date'] = date_pretty
+                event_data['time'] = time_pretty
+
                 result.append(event_data)
 
             return web.json_response(result)
